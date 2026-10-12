@@ -1,72 +1,102 @@
-# FW Mem Guard Action — release preparation
+# FW Mem Guard Action
 
-Intended repository: `itainover-create/fw-mem-guard-action`. This directory is the
-complete public wrapper source, with `action.yml` at its root. No private engine
-source belongs in this repository. No public tag or Marketplace listing is claimed.
+Catch firmware Flash and RAM budget regressions in GitHub Actions using a saved
+`.fwmg.json` project.
 
-Requires a Linux x64 runner capable of running the Action's Node 24 runtime.
-The CLI target is glibc 2.28+; Rocky Linux 8 acceptance is a release gate.
+[GitHub Marketplace](https://github.com/marketplace/actions/fw-mem-guard-firmware-memory-budgets)
+ · [Action v0.3.7 preview](https://github.com/itainover-create/fw-mem-guard-action/releases/tag/v0.3.7)
+ · [Linux CLI download](https://github.com/itainover-create/fw-mem-guard/releases/tag/v0.3.7)
+ · [Documentation](https://itainover-create.github.io/fw-mem-guard/)
 
-After compiling firmware and restoring a reviewed baseline, use the Action pinned
-to the full reviewed commit SHA in its dedicated repository. Set `project` to the
-saved `.fwmg.json` file. The default CLI version is 0.3.7.
+## Quick start
 
-Inputs:
-- `project`: workspace-relative project, default `firmware.fwmg.json`.
-- `version`: exact version present in `releases.json`; no floating versions.
-- `cli-archive`: optional original CLI tar.gz, absolute or workspace-relative.
-  When provided, the Action performs no network requests. Missing or invalid files
-  fail without downloading a replacement. Provision the Action and runner too;
-  this option alone does not make GitHub Actions completely air-gapped.
-- `report`: new workspace-relative JSON file, default `fwmg-result.json`.
-- `fail-on-budget-exceeded`: `true` by default; `false` permits budget warnings
-  only. Invalid inputs, downloads, JSON and execution failures still fail.
+Set up and review a project with FW Mem Guard first. Commit its `.fwmg.json` file
+and provision the baseline and current firmware files in your workflow, preserving
+the paths recorded in the project. Compile the current firmware before this step.
 
-Outputs: `result` is `pass`, `budget-exceeded` or `error`; `exit-code` is the CLI
-outcome (0, 2, 1), even when warning-only returns success. `report-path` is emitted
-only after valid JSON has been written. Missing outputs must never be treated as
-PASS: runner/runtime failures can occur before this code starts.
+```yaml
+permissions:
+  contents: read
 
-`stderr` diagnostics do not override a valid exit code and matching JSON result.
-Full reports may contain object paths; no report is uploaded automatically.
+jobs:
+  memory-budget:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # Add your firmware build and baseline retrieval steps here.
+      - name: Check firmware memory budgets
+        id: memory
+        uses: itainover-create/fw-mem-guard-action@a96092596041597a687c335dbaa90d5ed6ede5a7 # v0.3.7
+        with:
+          project: firmware.fwmg.json
+          version: 0.3.7
+```
 
-Downloads use a direct GitHub Releases URL, never the Releases API. Firewalls must
-permit GitHub's release-download redirects as well. Both paths check the archive
-against the SHA-256 in this Action's source before safe extraction and execution.
-For enforcement do not use `continue-on-error`; make the job a required check.
+The Action downloads the compiled CLI from the public release and verifies its
+SHA-256 against the value pinned in the Action source before extraction and
+execution. Pin the Action to the full commit SHA for reproducible CI.
 
-## Maintainer release gates
+## Inputs
 
-1. Create the dedicated public repository before any public Action tag.
-2. Pass native CLI compatibility and actual packaged comparisons on Rocky 8 and
-   Ubuntu 24.04; retain provenance, ABI report and artifact SHA-256.
-3. Preserve the reviewed archive digest in `releases.json`. Version 0.3.7 is pinned
-   to the archive from private workflow run 38200827611, commit
-   0c68b6f84a24396102b4ce7c533c108f21d72cdd. Rocky 8 and Ubuntu acceptance passed.
-   The public download is pending; the offline archive path is ready.
-4. Run `node --test test.js` and the private real-CLI smoke test against the same
-   original archive. Never rebuild after approving its digest.
-5. Publish the reviewed compiled CLI and checksum in the product release repo.
-6. Test the actual download, then tag the dedicated wrapper and publish the Action
-   listing. Update examples to a real full commit SHA, not an invented placeholder.
+| Input | Default | Purpose |
+| --- | --- | --- |
+| `project` | `firmware.fwmg.json` | Existing workspace-relative project file. |
+| `version` | `0.3.7` | Exact CLI version present in `releases.json`. |
+| `cli-archive` | unset | Optional original CLI tar.gz, absolute or workspace-relative. |
+| `report` | `fwmg-result.json` | New workspace-relative JSON report; existing files are not overwritten. |
+| `fail-on-budget-exceeded` | `true` | Set `false` to warn on budget violations while still failing on errors. |
 
-Only wrapper code is MIT-licensed. Downloaded binaries retain their own license.
+For warning-only adoption, add `fail-on-budget-exceeded: 'false'` under `with`.
+A budget violation then produces a GitHub warning and a workflow summary while
+retaining `result=budget-exceeded` and CLI `exit-code=2`. Infrastructure and input
+errors still fail. For enforcement, keep the default and make the job a required
+check; do not use `continue-on-error` to suppress failures.
 
-## Public-download acceptance and publication script
+## Outputs
 
-The private development repository now tracks `scripts/publish-action-release.ps1`
-for owner review. `Publish` verifies the input archive against this source's
-`releases.json`, publishes to the exact repository/tag used by `releaseAsset`,
-downloads the public bytes and rechecks SHA-256, then dispatches
-`.github/workflows/public-acceptance.yml`. It never accepts a license agreement.
+| Output | Values |
+| --- | --- |
+| `result` | `pass`, `budget-exceeded`, or `error` |
+| `exit-code` | CLI result: `0` PASS, `2` budget exceeded, `1` error |
+| `report-path` | Absolute path of the validated JSON report, when available |
 
-That workflow uses the pinned, licensed MicroPython sample and actual downloaded
-CLI to test PASS, budget failure, warning-only, restored PASS and input error.
-`Tag` requires its successful run ID at the current Action main commit, the exact
-CLI version/digest in its log, and another successful public hash check before
-creating the Action's release/tag. Marketplace registration remains a separate
-website step, including two-factor authentication and the developer agreement.
+Missing outputs must not be interpreted as PASS: runner/runtime failures can
+occur before the Action starts. Diagnostics on stderr do not override an otherwise
+valid CLI result. Full reports can include object paths and are not uploaded
+automatically.
 
-The original 0.3.7 archive is pinned and passed offline native acceptance with
-Node 22 and 24, including the real Zephyr +256-byte attribution case.
-Public download acceptance remains pending until the owner publishes the release.
+## Offline CLI provisioning
+
+Download the original `fw-mem-guard-0.3.7-linux-x64.tar.gz` and place it on the
+runner. Set `cli-archive` to that file. The same pinned digest is checked before
+extraction, and this path makes no CLI-download network requests. An invalid local
+archive fails without falling back to a download. Provision the Action source,
+runner and firmware dependencies separately for a disconnected environment.
+
+## Compatibility and validation
+
+- Linux x64 runner capable of executing the Action's Node 24 runtime; glibc 2.28+
+  and the runtime's libstdc++ dependencies. Archive extraction uses tar and gzip.
+  The Action uses its own Node runtime; no setup-node step is required.
+- Complete GNU ld MAP files paired with matching ARM ELF32 little-endian firmware.
+  This is firmware analysis, not analysis of Linux application executables.
+- The compiled CLI passed offline Rocky Linux 8 and Ubuntu 24.04 acceptance with
+  Node 22 and 24. The Action itself uses Node 24.
+- Real firmware validation includes MicroPython and Zephyr 3.7.0 qemu_cortex_m3,
+  including a controlled +256-byte RAM change attributed to its source object.
+  nRF Connect SDK, STM32CubeIDE and MCUXpresso-specific validation is still pending.
+
+[Public-download acceptance](https://github.com/itainover-create/fw-mem-guard-action/actions/runs/38305734028)
+passed on the exact v0.3.7 commit: pinned public archive, real MicroPython PASS,
+budget exit 2, warning-only, restored PASS and input-error handling.
+
+The Action is currently a pre-release. Its published tag and approved CLI bytes
+remain unchanged when documentation on main is updated.
+
+## License and privacy
+
+This repository contains only the MIT-licensed orchestration wrapper. The
+compiled CLI retains its own license; private engine source is not included.
+Memory comparison runs locally on the runner. Downloads use direct GitHub
+Releases URLs, with no Releases API call. Firewalls must also permit GitHub's
+release-download redirects.

@@ -1,0 +1,32 @@
+name: FW Mem Guard Firmware Memory Budgets
+description: Compare GNU Arm firmware builds and fail CI when Flash or RAM budgets are exceeded.
+author: itainover-create
+branding:
+  icon: shield
+  color: blue
+inputs:
+  project:
+    description: Saved .fwmg.json project, relative to the checked-out workspace.
+    default: firmware.fwmg.json
+  version:
+    description: Exact CLI release version; floating versions are rejected.
+    default: 0.3.7
+  cli-archive:
+    description: Local original CLI tar.gz; verified against the pinned digest. No network requests when set.
+    required: false
+  fail-on-budget-exceeded:
+    description: Set false for budget warnings only; infrastructure errors always fail.
+    default: 'true'
+  report:
+    description: New JSON report path, relative to the workspace. Existing files are never overwritten.
+    default: fwmg-result.json
+outputs:
+  result:
+    description: 'pass, budget-exceeded, or error; missing output also means execution failure.'
+  exit-code:
+    description: '0 PASS, 2 budget exceeded, 1 input or execution error.'
+  report-path:
+    description: Absolute path of the validated JSON report; absent on input or execution error.
+runs:
+  using: node24
+  main: run.js

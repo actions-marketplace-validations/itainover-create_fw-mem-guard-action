@@ -1,0 +1,36 @@
+name: Public CLI acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact CLI version already published and pinned in releases.json
+        required: true
+        default: '0.3.7'
+permissions:
+  contents: read
+jobs:
+  public-download:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fetch independently reviewed real firmware sample
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib,io,urllib.request,zipfile
+          url='https://itainover-create.github.io/fw-mem-guard/samples/micropython-f411-v1.24.1.zip'
+          with urllib.request.urlopen(url,timeout=60) as response:
+              data=response.read(16*1024*1024+1)
+          if len(data)>16*1024*1024 or hashlib.sha256(data).hexdigest()!='a0ab64c78add7156599356dee2e392b43559cad178d773f6454e6a4dba05b808':
+              raise ValueError('Public sample digest/size mismatch')
+          with zipfile.ZipFile(io.BytesIO(data)) as z:z.extractall('sample')
+          PY
+      - name: Real public archive and Action roundtrip
+        env:
+          CLI_VERSION: ${{ inputs.version }}
+        run: node public-smoke.js "$CLI_VERSION" sample

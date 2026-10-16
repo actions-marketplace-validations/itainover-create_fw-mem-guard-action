@@ -1,5 +1,5 @@
 name: FW Mem Guard Firmware Memory Budgets
-description: Compare GNU Arm firmware builds and fail CI when Flash or RAM budgets are exceeded.
+description: Compare GNU Arm ELF/MAP firmware builds, including verified Zephyr and MicroPython examples; enforce Flash/RAM growth budgets in CI.
 author: itainover-create
 branding:
   icon: shield

@@ -1,5 +1,7 @@
 # FW Mem Guard Action
 
+Compare GNU Arm ELF/MAP firmware builds in CI, including verified Zephyr v3.7.0 `qemu_cortex_m3` and MicroPython v1.24.1 `NUCLEO_F411RE` examples. Enforce Flash/RAM usage and growth budgets before merging firmware changes.
+
 Catch firmware Flash and RAM budget regressions in GitHub Actions using a saved
 `.fwmg.json` project.
 
@@ -100,3 +102,13 @@ compiled CLI retains its own license; private engine source is not included.
 Memory comparison runs locally on the runner. Downloads use direct GitHub
 Releases URLs, with no Releases API call. Firewalls must also permit GitHub's
 release-download redirects.
+
+## Zephyr: select the final link outputs
+
+For each completed baseline/current build, select `build/zephyr/zephyr.map` together with `build/zephyr/zephyr.elf` from that same build. A custom build directory or sysbuild image changes the parent path; select the final pair within that image's `zephyr` directory.
+
+`zephyr_pre0.*`, `zephyr_pre1.*` and other `zephyr_pre*` files are intermediate linker stages. Do not combine them with the final files, even when their timestamps are close. Do not combine files from different images or builds. FW Mem Guard never substitutes paths automatically. File names alone do not establish provenance: existing MAP/ELF structural checks still apply, and renamed intermediate files cannot be identified reliably by their names.
+
+The next extension/CLI release adds an early, focused error for recognized intermediate filenames. In 0.3.7, a mixed pair may instead produce the general MAP/ELF mismatch diagnostic; reselect the final pair and rerun comparison.
+
+[Verified firmware configurations and evidence](https://itainover-create.github.io/fw-mem-guard/REAL_FIRMWARE.html#zephyr).
